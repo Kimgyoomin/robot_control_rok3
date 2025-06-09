@@ -93,6 +93,32 @@ namespace gazebo
 
         physics::JointPtr LS, RS;
 
+        // 25.05.26
+        bool ik_initialized             = false;                            // IK initialized flag
+        VectorXd theta_left_nonsingular = VectorXd::Zero(6);                // Non-singular solution for left foot IK
+        VectorXd theta_right_nonsingular = VectorXd::Zero(6);               // Non-singular solution for right foot IK
+        VectorXd theta_init_left        = VectorXd::Zero(6);                // Initial guess for left foot IK
+        VectorXd theta_init_right       = VectorXd::Zero(6);                // Initial guess for right foot IK
+        VectorXd theta_final_left       = VectorXd::Zero(6);                // Final value for left foot IK
+        VectorXd theta_final_right      = VectorXd::Zero(6);                // Final value for right foot IK
+
+        VectorXd theta_left_6_2_down    = VectorXd::Zero(6);                // Left foot IK solution for 6-2 down
+        VectorXd theta_right_6_2_down   = VectorXd::Zero(6);                // Right foot IK solution for 6-2 down
+
+        VectorXd theta_left_6_2_up      = VectorXd::Zero(6);                // Left foot IK solution for 6-2 up
+        VectorXd theta_right_6_2_up     = VectorXd::Zero(6);                // Right foot IK solution for 6-2 up
+
+        VectorXd init_degrees_left      = VectorXd::Zero(6);                // Initial joint angles for left foot
+        VectorXd init_degrees_right     = VectorXd::Zero(6);                // Initial joint angles for right foot
+
+        // Set Variable for usage
+        //  double dt                      = 0.0;                              // Time step
+        VectorXd q_des_left_           = VectorXd::Zero(6);                // Desired Left joint angles, Calculated by IK
+        VectorXd q_des_right_          = VectorXd::Zero(6);                // Desired Left joint angles, Calculated by IK
+        VectorXd q_init_               = VectorXd::Zero(13);             // Initial guess for inverse kinematics
+        VectorXd q_des_joint_          = VectorXd::Zero(13);             // Desired joint angles, including base position and orientation
+
+
         //* Index setting for each joint
         
         enum
@@ -140,6 +166,705 @@ namespace gazebo
     GZ_REGISTER_MODEL_PLUGIN(rok3_plugin);
 }
 
+/*--------------------------------------------*/
+// Link 1, Link2, Link3 length 1m
+// q(0) = 10deg, q(1) = 20deg, q(3) = 30(deg)
+
+
+
+// MatrixXd getTransformI0()
+// {
+
+//     MatrixXd temp_matrix = MatrixXd::Identity(4,4);
+     
+
+//     return temp_matrix;
+// }
+
+// MatrixXd jointToTransform01(VectorXd q)
+// {
+//     MatrixXd temp_matrix = MatrixXd::Identity(4,4);
+
+//     temp_matrix(0,0) = cos(q(0)); temp_matrix(0, 2) = sin(q(0));
+//     temp_matrix(2,0) = -sin(q(0)); temp_matrix(2,2) = cos(q(0));
+//     temp_matrix(2,3) = 1.0;
+
+//     return temp_matrix;
+// }
+
+// MatrixXd jointToTransform12(VectorXd q)
+// {
+//     MatrixXd temp_matrix = MatrixXd::Identity(4,4);
+
+//     temp_matrix(0,0) = cos(q(1)); temp_matrix(0, 2) = sin(q(1));
+//     temp_matrix(2,0) = -sin(q(1)); temp_matrix(2,2) = cos(q(1));
+//     temp_matrix(2,3) = 1.0;
+
+//     return temp_matrix;
+// }
+
+// MatrixXd jointToTransform23(VectorXd q)
+// {
+//     MatrixXd temp_matrix = MatrixXd::Identity(4,4);
+
+//     temp_matrix(0,0) = cos(q(2)); temp_matrix(0, 2) = sin(q(2));
+//     temp_matrix(2,0) = -sin(q(2)); temp_matrix(2,2) = cos(q(2));
+//     temp_matrix(2,3) = 1.0;
+
+
+//     return temp_matrix;
+// }
+
+// MatrixXd jointToTransform34(VectorXd q)
+// {
+//     MatrixXd temp_matrix = MatrixXd::Identity(4,4);
+
+//     temp_matrix(0,0) = cos(q(2)); temp_matrix(0, 2) = sin(q(2));
+//     temp_matrix(2,0) = -sin(q(2)); temp_matrix(2,2) = cos(q(2));
+//     temp_matrix(2,3) = 1.0;
+
+
+//     return temp_matrix;
+// }
+
+// MatrixXd jointToTransform45(VectorXd q)
+// {
+//     MatrixXd temp_matrix = MatrixXd::Identity(4,4);
+
+//     temp_matrix(0,0) = cos(q(2)); temp_matrix(0, 2) = sin(q(2));
+//     temp_matrix(2,0) = -sin(q(2)); temp_matrix(2,2) = cos(q(2));
+//     temp_matrix(2,3) = 1.0;
+
+
+//     return temp_matrix;
+// }
+
+// MatrixXd jointToTransform56(VectorXd q)
+// {
+//     MatrixXd temp_matrix = MatrixXd::Identity(4,4);
+
+//     temp_matrix(0,0) = cos(q(2)); temp_matrix(0, 2) = sin(q(2));
+//     temp_matrix(2,0) = -sin(q(2)); temp_matrix(2,2) = cos(q(2));
+//     temp_matrix(2,3) = 1.0;
+
+
+//     return temp_matrix;
+// }
+
+
+// MatrixXd getTransform6E(VectorXd q)
+// {
+//     MatrixXd temp_matrix = MatrixXd::Identity(4,4);
+
+//     temp_matrix(0,0) = cos(q(2)); temp_matrix(0, 2) = sin(q(2));
+//     temp_matrix(2,0) = -sin(q(2)); temp_matrix(2,2) = cos(q(2));
+//     temp_matrix(2,3) = 1.0;
+
+
+//     return temp_matrix;
+// }
+
+
+
+// MatrixXd getTransform3E()
+// {
+
+//     MatrixXd temp_matrix = MatrixXd::Identity(4,4);
+
+//     temp_matrix(2,3) = 1.0;
+
+//     return temp_matrix;
+// }
+
+
+
+
+/*--------------------------------------------------------------------------------------------------*/
+// Practice 2
+// Homogeneous Transformation Matrix , Foward Kinematics
+MatrixXd getTransformI0(const VectorXd& q)
+{
+    MatrixXd temp_matrix = MatrixXd::Identity(4,4);
+
+
+    return temp_matrix;
+}
+
+
+
+MatrixXd jointToTransform01(const VectorXd& q)
+{
+    MatrixXd temp_matrix = MatrixXd::Identity(4,4);
+    
+    temp_matrix(0,0) = cos(q(0)); temp_matrix(0,1) = -sin(q(0));
+    temp_matrix(1,0) = sin(q(0)); temp_matrix(1,1) = cos(q(0));
+    temp_matrix(1,3) = 0.105;     temp_matrix(2,3) = -0.1512;
+
+    return temp_matrix;
+
+}
+MatrixXd jointToTransform12(const VectorXd& q)
+{
+    MatrixXd temp_matrix = MatrixXd::Identity(4,4);
+    temp_matrix(1,1) = cos(q(1)); temp_matrix(1,2) = -sin(q(1));
+    temp_matrix(2,1) = sin(q(1)); temp_matrix(2,2) = cos(q(1));
+
+    return temp_matrix;
+}
+
+
+MatrixXd jointToTransform23(const VectorXd& q)
+{
+    MatrixXd temp_matrix = MatrixXd::Identity(4,4);
+    temp_matrix(0,0) = cos(q(2)); temp_matrix(0,2) = sin(q(2));
+    temp_matrix(2,0) = -sin(q(2)); temp_matrix(2,2) = cos(q(2));
+
+    return temp_matrix;
+}
+
+MatrixXd jointToTransform34(const VectorXd& q)
+{
+    MatrixXd temp_matrix = MatrixXd::Identity(4,4);
+    temp_matrix(0,0) = cos(q(3)); temp_matrix(0,2) = sin(q(3));
+    temp_matrix(2,0) = -sin(q(3)); temp_matrix(2,2) = cos(q(3));
+    temp_matrix(2,3) = -0.35;
+
+    return temp_matrix;
+}
+MatrixXd jointToTransform45(const VectorXd& q)
+{
+    MatrixXd temp_matrix = MatrixXd::Identity(4,4);
+    temp_matrix(0,0) = cos(q(4)); temp_matrix(0,2) = sin(q(4));
+    temp_matrix(2,0) = -sin(q(4)); temp_matrix(2,2) = cos(q(4));
+    temp_matrix(2,3) = -0.35;
+
+    return temp_matrix;
+}
+MatrixXd jointToTransform56(const VectorXd& q)
+{
+    MatrixXd temp_matrix = MatrixXd::Identity(4,4);
+    temp_matrix(1,1) = cos(q(5)); temp_matrix(1,2) = -sin(q(5));
+    temp_matrix(2,1) = sin(q(5)); temp_matrix(2,2) = cos(q(5));
+
+    return temp_matrix;
+}
+MatrixXd getTransform6E(const VectorXd& q)
+{
+    MatrixXd temp_matrix = MatrixXd::Identity(4,4);
+    temp_matrix(2,3) = -0.09;
+
+    return temp_matrix;
+}
+
+VectorXd jointToPosition(const VectorXd& q)
+{
+    MatrixXd TI0(4,4), T6E(4,4), T0E(4,4);
+    
+    TI0 = getTransformI0(q);
+    T6E = getTransform6E(q);
+
+    T0E = TI0*jointToTransform01(q)*jointToTransform12(q)*jointToTransform23(q)*jointToTransform34(q)*jointToTransform45(q)*jointToTransform56(q)*T6E;
+
+    return T0E.block<3,1>(0,3);
+}
+
+MatrixXd jointToRotMat(const VectorXd& q)
+{
+    MatrixXd TI0(4,4), T6E(4,4), T0E(4,4);
+    
+    TI0 = getTransformI0(q);
+    T6E = getTransform6E(q);
+
+    T0E = TI0*jointToTransform01(q)*jointToTransform12(q)*jointToTransform23(q)*jointToTransform34(q)*jointToTransform45(q)*jointToTransform56(q)*T6E;
+
+    return T0E.block<3,3>(0,0);
+}
+VectorXd rotToEuler(MatrixXd rotMat, const VectorXd& q)
+{
+    MatrixXd TI0(4,4), T6E(4,4), T0E(4,4);
+    VectorXd euler_rot(3);
+    
+    TI0 = getTransformI0(q);
+    T6E = getTransform6E(q);
+
+    T0E = TI0*jointToTransform01(q)*jointToTransform12(q)*jointToTransform23(q)*jointToTransform34(q)*jointToTransform45(q)*jointToTransform56(q)*T6E;
+
+    euler_rot(0) = atan2(rotMat(1,0), rotMat(0,0));
+    euler_rot(1) = atan2(-rotMat(2,0), sqrt(rotMat(2,1)*rotMat(2,1) + (rotMat(2,2)*rotMat(2,2))));
+    euler_rot(2) = atan2(rotMat(2,1), rotMat(2,2));
+
+    return euler_rot;
+}   
+
+MatrixXd jointToPosJac(VectorXd q)
+{   
+
+    // Input: vector of generalized coordinates (joint angles)
+    // Output: J_P, Jacobian of the end-effector translation which maps joint velocities to end-effector linear velocities in I frame.
+    MatrixXd J_P = MatrixXd::Zero(3,6);
+    MatrixXd T_I0(4,4), T_01(4,4), T_12(4,4), T_23(4,4), T_34(4,4), T_45(4,4), T_56(4,4), T_6E(4,4);
+    MatrixXd T_I1(4,4), T_I2(4,4), T_I3(4,4), T_I4(4,4), T_I5(4,4), T_I6(4,4);
+    MatrixXd R_I1(3,3), R_I2(3,3), R_I3(3,3), R_I4(3,3), R_I5(3,3), R_I6(3,3);
+    Vector3d r_I_I1, r_I_I2, r_I_I3, r_I_I4, r_I_I5, r_I_I6;
+    Vector3d n_1, n_2, n_3, n_4, n_5, n_6;
+    Vector3d n_I_1,n_I_2,n_I_3,n_I_4,n_I_5,n_I_6;
+    Vector3d r_I_IE;
+
+
+    //* Compute the relative homogeneous transformation matrices.
+    T_I0 = MatrixXd::Identity(4,4);
+    T_01 = jointToTransform01(q);
+    T_12 = jointToTransform12(q);
+    T_23 = jointToTransform23(q);
+    T_34 = jointToTransform34(q);
+    T_45 = jointToTransform45(q);
+    T_56 = jointToTransform56(q);
+    T_6E = getTransform6E(q);
+
+    //* Compute the homogeneous transformation matrices from frame k to the inertial frame I.
+    T_I1 = T_I0*jointToTransform01(q);
+    T_I2 = T_I0*jointToTransform01(q)*jointToTransform12(q);
+    T_I3 = T_I0*jointToTransform01(q)*jointToTransform12(q)*jointToTransform23(q);
+    T_I4 = T_I0*jointToTransform01(q)*jointToTransform12(q)*jointToTransform23(q)*jointToTransform34(q);
+    T_I5 = T_I0*jointToTransform01(q)*jointToTransform12(q)*jointToTransform23(q)*jointToTransform34(q)*jointToTransform45(q);
+    T_I6 = T_I0*jointToTransform01(q)*jointToTransform12(q)*jointToTransform23(q)*jointToTransform34(q)*jointToTransform45(q)*jointToTransform56(q);
+
+    //* Extract the rotation matrices from each homogeneous transformation matrix. Use sub-matrix of EIGEN. https://eigen.tuxfamily.org/dox/group__QuickRefPage.html
+    R_I1 = T_I1.block<3,3>(0,0);
+    R_I2 = T_I2.block<3,3>(0,0);
+    R_I3 = T_I3.block<3,3>(0,0);
+    R_I4 = T_I4.block<3,3>(0,0);
+    R_I5 = T_I5.block<3,3>(0,0);
+    R_I6 = T_I6.block<3,3>(0,0);
+
+    //* Extract the position vectors from each homogeneous transformation matrix. Use sub-matrix of EIGEN.
+    r_I_I1 = T_I1.block<3,1>(0,3);
+    r_I_I2 = T_I2.block<3,1>(0,3);
+    r_I_I3 = T_I3.block<3,1>(0,3);
+    r_I_I4 = T_I4.block<3,1>(0,3);
+    r_I_I5 = T_I5.block<3,1>(0,3);
+    r_I_I6 = T_I6.block<3,1>(0,3);
+
+    //* Define the unit vectors around which each link rotate in the precedent coordinate frame.
+    n_1 << 0,0,1;
+    n_2 << 1,0,0;
+    n_3 << 0,1,0;
+    n_4 << 0,1,0;
+    n_5 << 0,1,0;
+    n_6 << 1,0,0;
+
+    //* Compute the unit vectors for the inertial frame I.
+    n_I_1 = R_I1*n_1;
+    n_I_2 = R_I2*n_2;
+    n_I_3 = R_I3*n_3;
+    n_I_4 = R_I4*n_4;
+    n_I_5 = R_I5*n_5;
+    n_I_6 = R_I6*n_6;
+
+    //* Compute the end-effector position vector.
+    r_I_IE = (T_I6 * T_6E).block<3,1>(0,3);
+
+
+    //* Compute the translational Jacobian. Use cross of EIGEN.
+    J_P.col(0) << n_I_1.cross(r_I_IE-r_I_I1);
+    J_P.col(1) << n_I_2.cross(r_I_IE-r_I_I2);
+    J_P.col(2) << n_I_3.cross(r_I_IE-r_I_I3);
+    J_P.col(3) << n_I_4.cross(r_I_IE-r_I_I4);
+    J_P.col(4) << n_I_5.cross(r_I_IE-r_I_I5);
+    J_P.col(5) << n_I_6.cross(r_I_IE-r_I_I6);
+
+    // std::cout << "Test, JP:" << std::endl << J_P << std::endl;
+
+    return J_P;
+}
+
+
+MatrixXd jointToRotJac(VectorXd& q)
+{
+   // Input: vector of generalized coordinates (joint angles)
+    // Output: J_R, Jacobian of the end-effector orientation which maps joint velocities to end-effector angular velocities in I frame.
+    MatrixXd J_R(3,6);
+    MatrixXd T_I0(4,4), T_01(4,4), T_12(4,4), T_23(4,4), T_34(4,4), T_45(4,4), T_56(4,4), T_6E(4,4);
+    MatrixXd T_I1(4,4), T_I2(4,4), T_I3(4,4), T_I4(4,4), T_I5(4,4), T_I6(4,4);
+    MatrixXd R_I1(3,3), R_I2(3,3), R_I3(3,3), R_I4(3,3), R_I5(3,3), R_I6(3,3);
+    Vector3d n_1, n_2, n_3, n_4, n_5, n_6;
+    Vector3d n_I_1,n_I_2,n_I_3,n_I_4,n_I_5,n_I_6;
+
+    //* Compute the relative homogeneous transformation matrices.
+    T_I0 = MatrixXd::Identity(4,4);
+    T_01 = jointToTransform01(q);
+    T_12 = jointToTransform12(q);
+    T_23 = jointToTransform23(q);
+    T_34 = jointToTransform34(q);
+    T_45 = jointToTransform45(q);
+    T_56 = jointToTransform56(q);
+    T_6E = getTransform6E(q);
+
+    //* Compute the homogeneous transformation matrices from frame k to the inertial frame I.
+    T_I1 = T_I0*jointToTransform01(q);
+    T_I2 = T_I0*jointToTransform01(q)*jointToTransform12(q);
+    T_I3 = T_I0*jointToTransform01(q)*jointToTransform12(q)*jointToTransform23(q);
+    T_I4 = T_I0*jointToTransform01(q)*jointToTransform12(q)*jointToTransform23(q)*jointToTransform34(q);
+    T_I5 = T_I0*jointToTransform01(q)*jointToTransform12(q)*jointToTransform23(q)*jointToTransform34(q)*jointToTransform45(q);
+    T_I6 = T_I0*jointToTransform01(q)*jointToTransform12(q)*jointToTransform23(q)*jointToTransform34(q)*jointToTransform45(q)*jointToTransform56(q);
+
+    //* Extract the rotation matrices from each homogeneous transformation matrix.
+    R_I1 = T_I1.block<3,3>(0,0);
+    R_I2 = T_I2.block<3,3>(0,0);
+    R_I3 = T_I3.block<3,3>(0,0);
+    R_I4 = T_I4.block<3,3>(0,0);
+    R_I5 = T_I5.block<3,3>(0,0);
+    R_I6 = T_I6.block<3,3>(0,0);
+
+    //* Define the unit vectors around which each link rotate in the precedent coordinate frame.
+    n_1 << 0,0,1;
+    n_2 << 1,0,0;
+    n_3 << 0,1,0;
+    n_4 << 0,1,0;
+    n_5 << 0,1,0;
+    n_6 << 1,0,0;
+
+    //* Compute the translational Jacobian.
+    J_R.col(0) << R_I1*n_1;
+    J_R.col(1) << R_I2*n_2;
+    J_R.col(2) << R_I3*n_3;
+    J_R.col(3) << R_I4*n_4;
+    J_R.col(4) << R_I5*n_5;
+    J_R.col(5) << R_I6*n_6;
+
+
+    // std::cout << "Test, J_R:" << std::endl << J_R << std::endl;
+
+    return J_R;
+}
+
+MatrixXd pseudoInverseMat(MatrixXd A, double lambda)
+{
+    // Input Any Mat m-by-n matrix
+    // Output Any Mat n-by-m pseudo-inverse of the input according to Moore-Penrose Formula
+    // for damped pseudo-inverse
+    // Left Damped Pseudo-Inverse 
+    // [(A^T A + lambda ^2 * I_{n*n})^{-1} * A^T]
+    // Right Damped Pseudo-Inverse
+    // [A^T (A * A^T + lambda^2 I_{m*m})^{-1}]
+    MatrixXd pinvA;
+    int m = A.rows();
+    int n = A.cols();
+
+    if (m >= n)
+    {
+        // Left Damped Pseudo-Inverse
+        MatrixXd I = MatrixXd::Identity(n,n);
+        pinvA = (A.transpose() * A + lambda * lambda * I).inverse() * A.transpose();
+    }
+    else
+    {
+        // Right Damped Pseudo-Inverse
+        MatrixXd I = MatrixXd::Identity(m,m);
+        pinvA = A.transpose() * (A * A.transpose() + lambda * lambda * I).inverse();
+    }
+
+
+    return pinvA;
+}
+
+VectorXd rotMatToRotVec(MatrixXd C)
+{
+    // Input : a rotation Matrix C
+    // Output : the rotational Vector which describes the rotation C
+    Vector3d phi, n;
+    double th;
+
+    th = acos((C(0,0) + C(1, 1) + C(2, 2) - 1) / 2.0); // Calc Rotation Angle
+
+
+    if (fabs(th) < 0.001) {
+            n << 0,0,0;  // If too small -> no rotation -> calc as rotates zero
+    }
+    else
+    {
+        n(0) = (C(2,1) - C(1,2)) / (2 * sin(th));
+        n(1) = (C(0,2) - C(2,0)) / (2 * sin(th));
+        n(2) = (C(1,0) - C(0,1)) / (2 * sin(th));
+
+    }
+
+    phi = th * n;
+
+    return phi;
+}
+
+
+VectorXd inverseKinematics(const VectorXd& r_des, const MatrixXd& C_des, const VectorXd& q0, double tol)
+{
+    // Input  : desired eef position, desired eef orientation, initial guess for joint angles, threshold for the stopping-criterion
+    // Output : joint angles which match desired eef position and orientation
+    //* Set maximum number of iterations
+    const double max_it = 200;
+    //* Damping Factor
+    const double lambda = 0.001;
+
+    //* Initialize the solution with initial guess
+    int num_it = 0;
+
+
+    // 1) Initialize first err
+    
+    VectorXd q  = q0;
+    // VectorXd dq = VectorXd::Zero(6);
+    VectorXd dXe = VectorXd::Zero(6);
+
+    Vector3d dr = r_des - jointToPosition(q);
+    MatrixXd C_IE = jointToRotMat(q);
+    MatrixXd C_err =C_des * C_IE.transpose();
+    Vector3d dph = rotMatToRotVec(C_err);
+    // VectorXd dXe(6);
+    dXe << dr(0), dr(1), dr(2), 
+           dph(0), dph(1), dph(2);
+    
+
+    ////////////////////////////////////////////////
+    //** Iterative inverse kinematics
+    ////////////////////////////////////////////////
+
+    //* Iterate util terminating condition
+    while (num_it < max_it && dXe.norm()>tol)
+    {
+        MatrixXd J(6,6), J_P(3, 6), J_R(3, 6);
+        // Compute Inverse Jacobian
+        J_P = jointToPosJac(q);
+        J_R = jointToRotJac(q);
+        J.setZero();
+        J.block<3,6>(0,0) = J_P;
+        J.block<3,6>(3,0) = J_R;  // Geometric Jacobian
+        
+
+        // Convert to Geometric Jacobian to Analytic Jacobian
+        MatrixXd J_plus = pseudoInverseMat(J, lambda);
+
+        // Error Vector
+        dr = r_des -jointToPosition(q);
+        C_IE = jointToRotMat(q);
+        C_err = C_des * C_IE.transpose();
+        dph = rotMatToRotVec(C_err);
+        dXe << dr(0), dr(1), dr(2), dph(0), dph(1), dph(2);
+
+
+
+        // Update q
+        VectorXd dq = J_plus * dXe;
+        q += 0.5 * dq;
+
+        num_it++;
+
+    }
+
+    // std::cout << "iteration: " << num_it << ", Value" << q << std::endl;
+
+
+    return q;
+}
+
+
+
+
+
+
+
+
+
+void Practice()
+{   
+    // Update time 1ms
+    // common::Time current_time = model->GetWorld()->SimTime();
+    // double dt = current_time.Double() - last_update_time.Double();
+
+    // time = time + dt;
+
+    // //* setting for getting dt at next step
+    // last_update_time = current_time;
+
+    // if (time < 5.)
+    // joint[0].targetRadian = poly3(time, 0, 목표, 5);
+
+
+    VectorXd q = VectorXd::Zero(6);
+    // MatrixXd T0E(4,4), TI0(4,4), T3E(4,4); // Practice 1
+    MatrixXd T0E(4,4), TI0(4,4), T6E(4,4);
+    MatrixXd C0E(3,3);
+    VectorXd pos, euler;
+    MatrixXd rotMat;
+
+
+    // std::cout << "\033"
+    /* Setting For q */
+    // Set q for degree
+    q << 10, 20, 30, 40, 50, 60;
+    // q << 10, 10, 10, 10, 10, 10;
+    q = q*D2R; // change deg to radian
+
+
+
+
+    ////////////////////////////////////////////////////////////////////////////////
+    //                                Project 2                                   //
+    ////////////////////////////////////////////////////////////////////////////////
+    {
+        std::cout << C_BLUE << "\n===================== [ Project 2: FK, Euler ] =====================\n" << C_RESET;
+
+        VectorXd pos = jointToPosition(q);
+        MatrixXd rotMat = jointToRotMat(q);
+        VectorXd eulerZYX = rotToEuler(rotMat, q) * R2D;
+
+        std::cout << C_GREEN << "[End-Effector Position (x y z) in m]\n" << C_RESET;
+        std::cout << pos.transpose() << "\n\n";
+
+        std::cout << C_GREEN << "[Rotation Matrix (3x3)]\n" << C_RESET;
+        std::cout << rotMat << "\n\n";
+
+        std::cout << C_GREEN << "[Euler Angles (ZYX, deg)]\n" << C_RESET;
+        std::cout << eulerZYX.transpose() << "\n";
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    // TI0 = getTransformI0(q);
+    // T3E = getTransform3E(); // Practice 01
+    // T6E = getTransform6E(q);
+
+
+    // T0E = TI0*jointToTransform01(q)*jointToTransform12(q)*jointToTransform23(q)*T3E; // Practice 01
+    // T0E = TI0*jointToTransform01(q)*jointToTransform12(q)*jointToTransform23(q)*jointToTransform34(q)*jointToTransform45(q)*jointToTransform56(q)*T6E;
+    // C0E = T0E.block<3,3>(0, 0);
+    // rotMat = T0E.block<3,3>(0,0);
+    // pos = jointToPosition(q);
+    // pos = T0E.block<3,1>(0, 3);
+
+    // euler = rotMat.eulerAngles(2, 1, 0) * R2D;
+    // rotMat = jointToRotMat(q);
+    // euler = rotToEuler(rotMat);
+
+    // cout << "position = " << pos << endl;
+    // cout << "Rotation Matrix = " << rotMat << endl;
+    // cout << "EulerZYX = " << euler.transpose() << endl; 
+
+    // cout << "Position = " << jointToPosition(q) << endl;
+    // cout << "Rotation Matrix = " << jointToRotMat(q) << endl;
+    // cout << "Euler ZYX = " << rotToEuler(jointToRotMat(q), q) << endl;
+
+    // cout << "Translational Jacobian" << endl;
+    // jointToPosJac(q);
+
+    // cout << "Rotational Jacobian" << endl;
+    // jointToRotJac(q);
+
+    // * Practice 4 25.05.07 //
+    // Kimgyoomin //
+    // 1. Desired Angle (Deg -> Ang)
+    // VectorXd q_des(6);
+    // q_des << 10, 20, 30, 40, 50, 60;
+    // q_des *= D2R;
+
+    // 2. Initial Joint Angle (q_init = 0.5 * q_des)
+    VectorXd q_init = 0.5 * q;
+
+    // 3. Desired Position and Angle
+    VectorXd x_des = jointToPosition(q);
+    MatrixXd C_des = jointToRotMat(q);
+
+    // 4. Present Position and Angle
+    VectorXd x_init = jointToPosition(q_init);
+    MatrixXd C_init = jointToRotMat(q_init);
+
+    // 5. Calc error between des, init
+    VectorXd dx = x_des - x_init;
+    MatrixXd C_err = C_des * C_init.transpose();
+    VectorXd dph = rotMatToRotVec(C_err); // Rotation error
+
+    // 6. Jacobian Calc
+    MatrixXd Jp = jointToPosJac(q);
+    MatrixXd Jr = jointToRotJac(q);
+    MatrixXd J_full(6,6);
+    J_full << Jp,
+              Jr;
+
+
+    // 7. Pseudo-Inverse of Jacobian
+    double lambda = 0.001;
+    MatrixXd pinvJ = pseudoInverseMat(J_full, lambda);
+
+    // 8. Lets' get output of Geometric Jacobian, Pseudo-inverse, dph
+    std::cout << C_CYAN << "Geometric Jacobain \n" << C_RESET << std::endl;
+    std::cout << J_full << std::endl;
+    std::cout << C_MAGENTA << "Pseudo-Inverse \n"   << C_RESET << std::endl;
+    std::cout << pinvJ  << std::endl;
+    std::cout << C_YELLOW << "Rotation Error Vector(dph)\n" << C_RESET << std::endl;
+    std::cout << dph.transpose() << std::endl; 
+
+
+
+
+    ////////////////////////////////////////////////////////////////////////////////
+    //                                Project 5-1                                 //
+    ////////////////////////////////////////////////////////////////////////////////
+    VectorXd r_des, q_calc;
+    {
+        r_des = jointToPosition(q);
+        C_des = jointToRotMat(q);
+
+        q_calc = inverseKinematics(r_des, C_des, q*0.5, 0.001);
+
+        std::cout << "Calculated q" << q_calc.transpose() << std::endl;
+    }
+
+
+    ////////////////////////////////////////////////////////////////////////////////
+    //                                Project 5-2                                 //
+    ////////////////////////////////////////////////////////////////////////////////
+    // Desired Pos for Base -> Desired_Pos = [0; 0.105; -0.55] & Desired Oreintation Base
+    // Result for each joint position = [0; 0; -63.756; 127.512; -63.756; 0]
+    {
+        // 1) Desired End-Effector Position (foot가 아니라 base를 향하도록 설정)
+        VectorXd r_des(3);
+        r_des << 0.0, 0.105, -0.55;
+
+        // 2) Desired End-Effector Orientation = Base frame
+        Matrix3d C_des = Matrix3d::Identity();
+
+        // 3) 초기 추정 관절각 (예: 전단계에서 구한 q*0.5)
+        VectorXd q0 = q * 0.5;  
+
+        // 4) IK 호출
+        VectorXd q_calc = inverseKinematics(r_des, C_des, q0, 0.001);
+
+        // 5) 결과 출력
+        std::cout << C_MAGENTA
+                  << "[Project 5-2] IK result for Base → Pos = [0,0.105,-0.55], Ori = I\n"
+                  << C_RESET;
+        std::cout << "q_calc (rad): " << q_calc.transpose() << std::endl;
+        std::cout << "q_calc (deg): ";
+        for (int i = 0; i < q_calc.size(); ++i) {
+            std::cout << q_calc[i] * R2D << (i+1<q_calc.size()? "  " : "\n");
+        }
+    }
+
+
+
+}
+
+
+
 void gazebo::rok3_plugin::Load(physics::ModelPtr _model, sdf::ElementPtr /*_sdf*/)
 {
     /*
@@ -161,7 +886,7 @@ void gazebo::rok3_plugin::Load(physics::ModelPtr _model, sdf::ElementPtr /*_sdf*
 
     //* model.urdf file based model data input to [Model* rok3_model] for using RBDL
     Model* rok3_model = new Model();
-    Addons::URDFReadFromFile("/home/user_name/.gazebo/models/rok3_model/urdf/rok3_model.urdf", rok3_model, true, true);
+    Addons::URDFReadFromFile("/home/kim/.gazebo/models/rok3_model/urdf/rok3_model.urdf", rok3_model, true, true);
     //↑↑↑ Check File Path ↑↑↑
     nDoF = rok3_model->dof_count - 6; // Get degrees of freedom, except position and orientation of the robot
     joint = new ROBO_JOINT[nDoF]; // Generation joint variables struct
@@ -175,30 +900,217 @@ void gazebo::rok3_plugin::Load(physics::ModelPtr _model, sdf::ElementPtr /*_sdf*
     last_update_time = model->GetWorld()->SimTime();
     update_connection = event::Events::ConnectWorldUpdateBegin(boost::bind(&rok3_plugin::UpdateAlgorithm, this));
 
+    Practice();
+
 }
+
+// Polynomial Trajectory
+// Make t time for 3th 
+double poly3(double t, double init, double final, double tf)
+{
+    double tmp;
+    double a0, a1, a2, a3;
+
+    a0      = init;
+    a1      = 0.;
+    a2      = 3 * (final - init) / (tf * tf);
+    a3      = -2 * (final - init) / (tf * tf * tf);
+
+
+    tmp     = a0 
+            + a1 * t
+            + a2 * t * t
+            + a3 * t * t* t;
+
+    return tmp;
+}
+
+
+
 
 void gazebo::rok3_plugin::UpdateAlgorithm()
 {
     /*
      * Algorithm update while simulation
      */
-
     //* UPDATE TIME : 1ms
     common::Time current_time = model->GetWorld()->SimTime();
     dt = current_time.Double() - last_update_time.Double();
-    //    cout << "dt:" << dt << endl;
+
+    // IK 초기 추정치 (지역 변수로 사용해도 무방, 또는 멤버 this->q_init_ 사용)
+    VectorXd local_q_ik_guess = VectorXd::Zero(6);
+    local_q_ik_guess << 0., 0., -63.756, 127.512, -63.756, 0.; // "Walk Ready" 자세
+    local_q_ik_guess *= D2R;
+
+    if(!this->ik_initialized) // If IK is not initialized
+    {   
+        // Set initial joint angles to avoid singularity
+        Eigen::Vector3d r_ground_left_nonsing(0.0, 0.105, -0.9);
+        Eigen::Vector3d r_ground_right_nonsing(0.0, 0.105, -0.9);
+
+        Eigen::Vector3d r_ground_left_vec(0.0, 0.105, -0.55);
+        Eigen::Vector3d r_ground_right_vec(0.0, 0.105, -0.55);
+        Matrix3d C_des = Matrix3d::Identity();
+
+        // 0-5초 동작의 최종 자세 (발을 든 자세)에 대한 관절각 계산 -> 멤버 변수에 저장
+        Eigen::Vector3d r_lifted_left_vec(0.0, 0.105, -0.55 + 0.2);
+        Eigen::Vector3d r_lifted_right_vec(0.0, 0.105, -0.55 + 0.2);
+
+        // 10 - 15 second lift up for 0.2m within 5 second, down for 0.2m within 5 seconds
+        // Eigen::Vector3d r_lift_left_6_2(0.0, 0.105, );
+
+        this->theta_left_nonsingular  = inverseKinematics(r_ground_left_nonsing, C_des, local_q_ik_guess, 0.001);
+        this->theta_right_nonsingular = inverseKinematics(r_ground_right_nonsing, C_des, local_q_ik_guess, 0.001);
+
+        this->theta_init_left  = inverseKinematics(r_ground_left_vec, C_des, this->theta_left_nonsingular, 0.001);
+        this->theta_init_right  = inverseKinematics(r_ground_right_vec, C_des, this->theta_right_nonsingular, 0.001);
+
+        this->theta_final_left = inverseKinematics(r_lifted_left_vec, C_des, this->theta_init_left, 0.001); // 이전 IK 결과를 추정치로 사용
+        this->theta_final_right = inverseKinematics(r_lifted_right_vec, C_des, this->theta_init_right, 0.001);
+
+
+
+        // Calculate IK once and calculate desired joint angles
+        for (int i = 0; i < 6; ++i)
+        {   
+            joint[i + 1].targetRadian = this->theta_left_nonsingular(i); // Set initial joint angles
+            joint[i + 7].targetRadian = this->theta_right_nonsingular(i); // Set initial joint angles
+
+            // joint[i + 1].targetRadian = this->theta_init_left(i); // Set initial joint angles
+            // joint[i + 7].targetRadian = this->theta_init_right(i); // Set initial joint angles
+        }
+        
+
+        this->ik_initialized = true; // Set IK initialized flag
+    }
+
+    if (this->ik_initialized && time <= 5.0)
+    { 
+      // 멤버 변수에 저장된 init/final 관절각을 사용하여 보간
+        for (int i = 0; i < 6; ++i)
+        {   
+            joint[i + 1].targetRadian = poly3(time, this->theta_left_nonsingular(i), this->theta_init_left(i), 5.0);
+            joint[i + 7].targetRadian = poly3(time, this->theta_right_nonsingular(i), this->theta_init_right(i), 5.0);
+        }
+        std::cout << C_YELLOW << "[IK] Heading to z = -0.55" << C_RESET << std::endl;
+    }
+    else if (this->ik_initialized && (5.0 < time && time <= 10.0))
+    {
+        double segment_time = time - 5.0; // 5초 이후의 시간
+        // 멤버 변수에 저장된 init/final 관절각을 사용하여 보간
+        for (int i = 0; i < 6; ++i)
+        { 
+            joint[i + 1].targetRadian = poly3(segment_time, this->theta_init_left(i), this->theta_final_left(i), 5.0);
+            joint[i + 7].targetRadian = poly3(segment_time, this->theta_init_right(i), this->theta_final_right(i), 5.0);
+        }
+        std::cout << C_YELLOW << "[IK] Lifting Leg for 0.2m z" << C_RESET << std::endl;
+
+
+    }
+
+    else if (this->ik_initialized && (10.0 < time && time <= 15.0))
+    {
+        double segment_time = time - 10.0; // 10초 이후의 시간
+
+        for (int i = 0; i < 6; ++i)
+        {
+            joint[i + 1].targetRadian = poly3(segment_time, this->theta_final_left(i), this->theta_init_left(i), 5.0);
+            joint[i + 7].targetRadian = poly3(segment_time, this->theta_final_right(i), this->theta_init_right(i), 5.0);
+
+        }
+        std::cout << C_YELLOW << "[IK] Downwarding Leg for 0.2m z" << C_RESET << std::endl;
+    }
+
+    // else if (this->ik_initialized && (time > 10.0 && time <= 15.0))
+    // {
+    //     // After 10 seconds to 15 seconds, place leg down 0.2m for z coordinate within 5 secodns 
+    //     // and place leg up 0.2m for z coordinate within 5 seconds between 10.0 and 15.0 secodns
+
+    //     double segment_time = time - 10.0; // Time after 10 seconds
+    //     for (int i = 0; i < 6; ++i)
+    //     {
+    //         joint[i + 1].targetRadian = poly3(segment_time, this)
+
+    //     }
+
+
+
+
+    // }
+
+
+    // else if (this->ik_initialized && time > 15.0)
+    // {
+    //     // 5초 이후의 동작 (마지막 자세 유지 또는 다음 동작으로 전환)
+    //     for (int i = 0; i < 6; ++i) {
+    //         joint[i + 1].targetRadian = this->theta_final_left(i);
+    //         joint[i + 7].targetRadian = this->theta_final_right(i);
+    //     }
+    //     std::cout << C_YELLOW << "[IK] Plz keep stand still!!!!" << C_RESET << std::endl;
+    // }
+
+    // // Poly3을 활용해서 내가 원하는 값을 여기서 알아내도록 하면 됨. -> 5초 동안!!!!
+    // if (time <= 5.0)
+    // { 
+    //   // 5초 동안, z방향으로 0.2m 이동하기  (In Cartesian Coordinates)
+    //   VectorXd r_final_left(3), r_final_right(3); // Final position for left and right foot
+
+    //   // For 5 seconds, move in z direction by 0.2m (In Cartesian Coordinates)
+    //   double z_init_left        = -0.55;                           // Initial z position for left foot
+    //   double z_init_right       = -0.55;                           // Initial z position for right foot
+      
+    //   double z_final_left       = -0.55 + 0.2;                     // Final z position for left foot
+    //   double z_final_right      = -0.55 + 0.2;                     // Final z position for right foot
+
+    //   MatrixXd C_des            = Matrix3d::Identity();            // Desired orientation for feet, Identity matrix  
+      
+    //   // Initial cartesian coordinate values for left and right feet
+    //   r_final_left  << 0.0, 0.105, z_final_left;        // Final position for left foot
+    //   r_final_right << 0.0, -0.105, z_final_right;     // Final position for right foot
+      
+    //   // Initial theta values for left and right feet
+    //   VectorXd theta_init_left           = q_des_left_;
+    //   VectorXd theta_init_right          = q_des_right_;
+      
+    //   // Calculate IK for each foot
+    //   theta_final_left          = inverseKinematics(r_final_left, C_des, theta_init_left*0.5, 0.001);  // Final joint angles for left foot
+    //   theta_final_right         = inverseKinematics(r_final_right, C_des, theta_init_right*0.5, 0.001); // Final joint angles for right foot
+        
+    //   for (int i = 0; i < 6; ++i)
+    //   {
+    //       // Set target joint angles for left and right feet
+    //       joint[i + 1].targetRadian = poly3(time, theta_init_left(i), theta_final_left(i), 5.0); // Left foot
+    //       joint[i + 7].targetRadian = poly3(time, theta_init_right(i), theta_final_right(i), 5.0); // Right foot
+
+    //       // q_des_joint_(i+1) = joint[i + 1].targetRadian;
+    //       // q_des_joint_(i+7) = joint[i + 7].targetRadian;
+    //   }
+
+    // }
+    // else if (time <= 10.0)
+    // {
+    //     // 5초 동안, z방향으로 0.2m 이동하기  (In Cartesian Coordinates)
+
+
+
+
+    // }
+
+    //* Read Sensors data, 현재 값을 알아내는 부분
+    GetjointData();
+    
+    //* Joint Controller, 
+    jointController();
+
+    // cout << "dt:" << dt << endl;
     time = time + dt;
-    //    cout << "time:" << time << endl;
+    // cout << "time:" << time << endl;
 
     //* setting for getting dt at next step
     last_update_time = current_time;
 
 
-    //* Read Sensors data
-    GetjointData();
-    
-    //* Joint Controller
-    jointController();
+
 }
 
 void gazebo::rok3_plugin::jointController()
