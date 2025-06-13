@@ -95,12 +95,16 @@ namespace gazebo
 
         // 25.05.26
         bool ik_initialized             = false;                            // IK initialized flag
+        VectorXd theta_left_start      =VectorXd::Zero(6);
+        VectorXd theta_right_start      =VectorXd::Zero(6);
         VectorXd theta_left_nonsingular = VectorXd::Zero(6);                // Non-singular solution for left foot IK
         VectorXd theta_right_nonsingular = VectorXd::Zero(6);               // Non-singular solution for right foot IK
         VectorXd theta_init_left        = VectorXd::Zero(6);                // Initial guess for left foot IK
         VectorXd theta_init_right       = VectorXd::Zero(6);                // Initial guess for right foot IK
         VectorXd theta_final_left       = VectorXd::Zero(6);                // Final value for left foot IK
         VectorXd theta_final_right      = VectorXd::Zero(6);                // Final value for right foot IK
+        VectorXd theta_90_left          = VectorXd::Zero(6);                // 90 degree solution for left foot IK
+        VectorXd theta_90_right         = VectorXd::Zero(6);                // 90 degree solution for right foot IK
 
         VectorXd theta_left_6_2_down    = VectorXd::Zero(6);                // Left foot IK solution for 6-2 down
         VectorXd theta_right_6_2_down   = VectorXd::Zero(6);                // Right foot IK solution for 6-2 down
@@ -298,7 +302,7 @@ MatrixXd getTransformI0(const VectorXd& q)
 
 
 
-MatrixXd jointToTransform01(const VectorXd& q)
+MatrixXd jointToTransform01_L(const VectorXd& q)
 {
     MatrixXd temp_matrix = MatrixXd::Identity(4,4);
     
@@ -309,6 +313,24 @@ MatrixXd jointToTransform01(const VectorXd& q)
     return temp_matrix;
 
 }
+
+
+MatrixXd jointToTransform01_R(const VectorXd& q)
+{
+    MatrixXd temp_matrix = MatrixXd::Identity(4,4);
+    
+    temp_matrix(0,0) = cos(q(0)); temp_matrix(0,1) = -sin(q(0));
+    temp_matrix(1,0) = sin(q(0)); temp_matrix(1,1) = cos(q(0));
+    temp_matrix(1,3) = -0.105;     temp_matrix(2,3) = -0.1512;
+
+    return temp_matrix;
+
+}
+
+
+
+
+
 MatrixXd jointToTransform12(const VectorXd& q)
 {
     MatrixXd temp_matrix = MatrixXd::Identity(4,4);
@@ -970,7 +992,8 @@ void gazebo::rok3_plugin::UpdateAlgorithm()
 
     // IK 초기 추정치 (지역 변수로 사용해도 무방, 또는 멤버 this->q_init_ 사용)
     VectorXd local_q_ik_guess = VectorXd::Zero(6);
-    local_q_ik_guess << 0., 0., -63.756, 127.512, -63.756, 0.; // "Walk Ready" 자세
+    // local_q_ik_guess << 0., 0., -63.756, 127.512, -63.756, 0.; // "Walk Ready" 자세
+    local_q_ik_guess << 0., 0., -0.001, 0.001, -0.001, 0.; // "Walk Ready" 자세
     local_q_ik_guess *= D2R;
 
     VectorXd q_sol_L(6), q_sol_R(6); // Variable for storing IK solutions for left and right feet
@@ -983,7 +1006,15 @@ void gazebo::rok3_plugin::UpdateAlgorithm()
 
         Eigen::Vector3d r_ground_left_vec(0.0, 0.105, -0.55);
         Eigen::Vector3d r_ground_right_vec(0.0, 0.105, -0.55);
+
+        Eigen::Vector3d r_step_right_first(0.0, )
         Matrix3d C_des = Matrix3d::Identity();
+        Matrix3d C_des_90_L = Matrix3d::Identity();
+        Matrix3d C_des_90_R = Matrix3d::Identity();
+        C_des_90_L(0, 0) = 0.0; C_des_90_L(0, 1) = -1.0; C_des_90_L(1, 0) = 1.0; C_des_90_L(1, 1) = 0.0; // 90도 회전 행렬 (왼발)
+        C_des_90_R(0, 0) = 0.0; C_des_90_R(0, 1) = 1.0; C_des_90_R(1, 0) = -1.0; C_des_90_R(1, 1) = 0.0; // 90도 회전 행렬 (오른발)
+
+
 
         // 0-5초 동작의 최종 자세 (발을 든 자세)에 대한 관절각 계산 -> 멤버 변수에 저장
         Eigen::Vector3d r_lifted_left_vec(0.0, 0.105, -0.55 + 0.2);
@@ -1002,82 +1033,139 @@ void gazebo::rok3_plugin::UpdateAlgorithm()
         this->theta_final_left = inverseKinematics(r_lifted_left_vec, C_des, this->theta_init_left, 0.001); // 이전 IK 결과를 추정치로 사용
         this->theta_final_right = inverseKinematics(r_lifted_right_vec, C_des, this->theta_init_right, 0.001);
 
+        this->theta_90_left = inverseKinematics(r_ground_left_vec, C_des_90_L, this->theta_init_left, 0.001); // 90도 회전 후 IK
+        this->theta_90_right = inverseKinematics(r_ground_right_vec, C_des_90_R, this->theta_init_right, 0.001); // 90도 회전 후 IK
 
+        q_sol_L = this->theta_left_nonsingular; // Set initial guess for left foot IK
+        q_sol_R = this->theta_right_nonsingular; // Set initial guess for right foot IK
 
         // Calculate IK once and calculate desired joint angles
+        // for (int i = 0; i < 6; ++i)
+        // {   
+        //     joint[i + 1].targetRadian = poly3(time, this->theta_left_start(i), this->theta_left_nonsingular(i), 5.0);
+        //     joint[i + 7].targetRadian = poly3(time, this->theta_right_start(i), this->theta_right_nonsingular(i), 5.0);
+
+        //     std::cout << C_CYAN << "[IK] Heading start1" << C_RESET << std::endl;
+        //     // joint[i + 1].targetRadian = this->theta_left_nonsingular(i); // Set initial joint angles
+        //     // joint[i + 7].targetRadian = this->theta_right_nonsingular(i); // Set initial joint angles
+
+        //     // joint[i + 1].targetRadian = this->theta_init_left(i); // Set initial joint angles
+        //     // joint[i + 7].targetRadian = this->theta_init_right(i); // Set initial joint angles
+        // }
+        
+        std::cout << C_CYAN << "[IK] Heading start2" << C_RESET << std::endl;
+        this->ik_initialized = true; // Set IK initialized flag
+    }
+
+
+    if (time < 5.0)
+    {
         for (int i = 0; i < 6; ++i)
         {   
-            joint[i + 1].targetRadian = this->theta_left_nonsingular(i); // Set initial joint angles
-            joint[i + 7].targetRadian = this->theta_right_nonsingular(i); // Set initial joint angles
+            joint[i + 1].targetRadian = poly3(time, this->theta_left_start(i), this->theta_left_nonsingular(i), 5.0);
+            joint[i + 7].targetRadian = poly3(time, this->theta_right_start(i), this->theta_right_nonsingular(i), 5.0);
+
+            std::cout << C_CYAN << "[IK] Heading start3" << C_RESET << std::endl;
+            // joint[i + 1].targetRadian = this->theta_left_nonsingular(i); // Set initial joint angles
+            // joint[i + 7].targetRadian = this->theta_right_nonsingular(i); // Set initial joint angles
 
             // joint[i + 1].targetRadian = this->theta_init_left(i); // Set initial joint angles
             // joint[i + 7].targetRadian = this->theta_init_right(i); // Set initial joint angles
         }
-        
 
-        this->ik_initialized = true; // Set IK initialized flag
+
+
     }
 
-    if (this->ik_initialized && time <= 5.0)
+
+
+
+
+    if (5.0 < time && time <= 10.0)
     { 
-      // For 0~5s : r0 ~ r1
-      // double fL = poly3(time, )
-      // 멤버 변수에 저장된 init/fin)
-      r_des_L = poly3Vec(time, r0_L, r1_L, 5.0);
-      r_des_R = poly3Vec(time, r0_R, r1_R, 5.0);
+        // For 0~5s : r0 ~ r1
+        // double fL = poly3(time, )
+        // 멤버 변수에 저장된 init/fin)
+        // r_des_L = poly3Vec(time, r0_L, r1_L, 5.0);
+        // r_des_R = poly3Vec(time, r0_R, r1_R, 5.0);
+
+        // q_sol_L = inverseKinematics(r_des_L, Matrix3d::Identity(), q_guess_L, 0.001); // Calculate IK for left foot
+        // q_sol_R = inverseKinematics(r_des_R, Matrix3d::Identity(), q_guess_R, 0.001); // Calculate IK for right foot
+          for (int i = 0; i < 6; ++i)
+          {   
+              joint[i + 1].targetRadian = poly3(time-5.0,this->theta_left_nonsingular(i), this->theta_init_left(i), 5.0);
+              joint[i + 7].targetRadian = poly3(time-5.0, this->theta_right_nonsingular(i), this->theta_init_right(i), 5.0);
+          }
+
         // for (int i = 0; i < 6; ++i)
-        // {   
-        //     joint[i + 1].targetRadian = poly3(time, this->theta_left_nonsingular(i), this->theta_init_left(i), 5.0);
-        //     joint[i + 7].targetRadian = poly3(time, this->theta_right_nonsingular(i), this->theta_init_right(i), 5.0);
+        // {
+        //     joint[i + 1].targetRadian = q_sol_L(i); // Set target joint angles for left foot
+        //     joint[i + 7].targetRadian = q_sol_R(i); // Set target joint angles for right foot
         // }
         std::cout << C_YELLOW << "[IK] Heading to z = -0.55" << C_RESET << std::endl;
     }
+
+
     // For 5 second ; -0.55 -> -0.35
-    else if (this->ik_initialized && (5.0 < time && time <= 10.0))
+    else if (10.0 < time && time <= 15.0)
     {
-        double segment_time = time - 5.0; // 5초 이후의 시간
-        r_des_L = poly3Vec(segment_time, r1_L, r2_L, 5.0);
-        r_des_R = poly3Vec(segment_time, r1_R, r2_R, 5.0);
+        double segment_time = time - 10.0; // 5초 이후의 시간
+        // r_des_L = poly3Vec(segment_time, r1_L, r2_L, 5.0);
+        // r_des_R = poly3Vec(segment_time, r1_R, r2_R, 5.0);
         // 멤버 변수에 저장된 init/final 관절각을 사용하여 보간
-        // for (int i = 0; i < 6; ++i)
-        // { 
-        //     joint[i + 1].targetRadian = poly3(segment_time, this->theta_init_left(i), this->theta_final_left(i), 5.0);
-        //     joint[i + 7].targetRadian = poly3(segment_time, this->theta_init_right(i), this->theta_final_right(i), 5.0);
-        // }
+        for (int i = 0; i < 6; ++i)
+        { 
+            joint[i + 1].targetRadian = poly3(segment_time, this->theta_init_left(i), this->theta_final_left(i), 5.0);
+            joint[i + 7].targetRadian = poly3(segment_time, this->theta_init_right(i), this->theta_final_right(i), 5.0);
+        }
         std::cout << C_YELLOW << "[IK] Lifting Leg for 0.2m z" << C_RESET << std::endl;
 
 
     }
     // For 5 second ; -0.35 -> -0.55
-    else if (this->ik_initialized && (10.0 < time && time <= 15.0))
+    else if (15.0 < time && time <= 20.0)
     {
-        double segment_time = time - 10.0; // 10초 이후의 시간
-        r_des_L = poly3Vec(segment_time, r2_L, r1_L, 5.0);
-        r_des_R = poly3Vec(segment_time, r2_R, r1_R, 5.0);
-        // for (int i = 0; i < 6; ++i)
-        // {
-        //     joint[i + 1].targetRadian = poly3(segment_time, this->theta_final_left(i), this->theta_init_left(i), 5.0);
-        //     joint[i + 7].targetRadian = poly3(segment_time, this->theta_final_right(i), this->theta_init_right(i), 5.0);
-
-        // }
+        double segment_time = time - 15.0; // 10초 이후의 시간
+        // r_des_L = poly3Vec(segment_time, r2_L, r1_L, 5.0);
+        // r_des_R = poly3Vec(segment_time, r2_R, r1_R, 5.0);
+        for (int i = 0; i < 6; ++i)
+        {
+            joint[i + 1].targetRadian = poly3(segment_time, this->theta_final_right(i), this->theta_init_right(i), 5.0);
+            joint[i + 7].targetRadian = poly3(segment_time, this->theta_final_left(i), this->theta_init_left(i), 5.0);
+        }
         std::cout << C_YELLOW << "[IK] Downwarding Leg for 0.2m z" << C_RESET << std::endl;
     }
-    else
+
+    // turn foot for 90 deg
+    else if (20.0 < time && time <= 25.0)
     {
-        r_des_L = r1_L; // Maintain the final position
-        r_des_R = r1_R; // Maintain the final position
+        double segment_time = time - 20.0; // 15초 이후의 시간
+        for (int i = 0; i < 6; ++i)
+        {
+            joint[i + 1].targetRadian = poly3(segment_time, this->theta_init_left(i), this->theta_90_left(i), 5.0);
+            joint[i + 7].targetRadian = poly3(segment_time, this->theta_init_right(i), this->theta_90_right(i), 5.0);
+        }
     }
 
-    q_sol_L = inverseKinematics(r_des_L, Matrix3d::Identity(), q_guess_L, 0.001); // Calculate IK for left foot
-    q_sol_R = inverseKinematics(r_des_R, Matrix3d::Identity(), q_guess_R, 0.001); // Calculate IK for right foot
-    q_guess_L = q_sol_L; // Update guess for next iteration
-    q_guess_R = q_sol_R; // Update guess for next iteration
+    // ========== HW since 250613 ========
 
-    for (int i = 0; i < 6 ; ++i)
-    {
-        joint[i + 1].targetRadian = q_sol_L(i); // Set target joint angles for left foot
-        joint[i + 7].targetRadian = q_sol_R(i); // Set target joint angles for right foot
-    }
+     
+    // else
+    // {
+    //     r_des_L = r1_L; // Maintain the final position
+    //     r_des_R = r1_R; // Maintain the final position
+    // }
+
+    // q_sol_L = inverseKinematics(r_des_L, Matrix3d::Identity(), q_guess_L, 0.001); // Calculate IK for left foot
+    // q_sol_R = inverseKinematics(r_des_R, Matrix3d::Identity(), q_guess_R, 0.001); // Calculate IK for right foot
+    // q_guess_L = q_sol_L; // Update guess for next iteration
+    // q_guess_R = q_sol_R; // Update guess for next iteration
+
+    // for (int i = 0; i < 6 ; ++i)
+    // {
+    //     joint[i + 1].targetRadian = q_sol_L(i); // Set target joint angles for left foot
+    //     joint[i + 7].targetRadian = q_sol_R(i); // Set target joint angles for right foot
+    // }
     // else if (this->ik_initialized && (time > 10.0 && time <= 15.0))
     // {
     //     // After 10 seconds to 15 seconds, place leg down 0.2m for z coordinate within 5 secodns 
